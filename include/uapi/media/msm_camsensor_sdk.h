@@ -48,7 +48,9 @@
 #define MSM_EEPROM_MEMORY_MAP_MAX_SIZE  80
 #define MSM_EEPROM_MAX_MEM_MAP_CNT      8
 
+#if !defined(CONFIG_MACH_LENOVO_TB8703)
 #define MSM_SENSOR_BYPASS_VIDEO_NODE    1
+#endif
 
 enum msm_sensor_camera_id_t {
 	CAMERA_0,
@@ -242,6 +244,7 @@ enum msm_camera_i2c_operation {
 	MSM_CAM_WRITE = 0,
 	MSM_CAM_POLL,
 	MSM_CAM_READ,
+	MSM_CAM_READ_GC5025A,
 };
 
 struct msm_sensor_i2c_sync_params {
@@ -302,7 +305,9 @@ struct msm_camera_sensor_slave_info {
 	unsigned char  is_init_params_valid;
 	struct msm_sensor_init_params sensor_init_params;
 	enum msm_sensor_output_format_t output_format;
+#if !defined(CONFIG_MACH_LENOVO_TB8703)
 	uint8_t bypass_video_node_creation;
+#endif
 };
 
 struct msm_camera_i2c_reg_array {
