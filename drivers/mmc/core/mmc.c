@@ -65,6 +65,35 @@ static const unsigned int tacc_mant[] = {
 static int mmc_decode_cid(struct mmc_card *card)
 {
 	u32 *resp = card->raw_cid;
+#ifdef CONFIG_KERNEL_CUSTOM_P3588
+	char emmc0_id[] = "QE13MB";
+	char emmc1_id[] = "RX1BMB";
+	char emmc2_id[] = "HBG4a2";
+	char emmc3_id[] = "QX13MB";
+	char emmc4_id[] = "HAG4a2";
+	char emmc5_id[] = "QE63MB";
+	char emmc0_name[] = "samsung KMQE10013M-B318  16+2";
+	char emmc1_name[] = "samsung KMRX1000BM-B614  32+3";
+	char emmc2_name[] = "Hynix H9TQ26ABJTACUR-KUM  32+2";
+	char emmc3_name[] = "Samsung KMQX10013M-B419 32+2 ";
+	char emmc4_name[] = "Hynix  H9TQ17ABJTBCUR-KUM  16+2";
+	char emmc5_name[] = "samsung KMQE60013M-B318  16+2";
+#else
+
+	char emmc0_id[] = "HAG4a2";
+	char emmc0_name[] = "Hynix H9TQ17ADFTACUR-KUM 16+3";
+	char emmc1_id[] = "HCG8a4";
+	char emmc1_name[] = "Hynix H9TQ52ACLTMCUR-KUM 64+4";
+	char emmc2_id[] = "GE6BMB";
+	char emmc2_name[] = "samsung KMGE6001BM-B421 16+3";
+	char emmc3_id[] = "RC14MB";
+	char emmc3_name[] = "samsung KMRC10014M-B809 64+4";
+	char emmc4_id[] = "RE1BMB";
+	char emmc4_name[] = "samsung KMRE1000BM-B512 16+3";
+	char emmc5_id[] = "RH64AB";
+	char emmc5_name[] = "samsung KMRH60014A-B614 64+4";
+#endif
+	char emmc_unknow[] = "unknow";
 
 	/*
 	 * The selection of the format here is based upon published
@@ -103,6 +132,35 @@ static int mmc_decode_cid(struct mmc_card *card)
 		card->cid.serial	= UNSTUFF_BITS(resp, 16, 32);
 		card->cid.month		= UNSTUFF_BITS(resp, 12, 4);
 		card->cid.year		= UNSTUFF_BITS(resp, 8, 4) + 1997;
+
+		if(strcmp(card->cid.prod_name, emmc0_id) == 0)
+		{
+			strcpy(card->cid.prod_version, emmc0_name);
+		}
+		else if(strcmp(card->cid.prod_name, emmc1_id) == 0)
+		{
+			strcpy(card->cid.prod_version, emmc1_name);
+		}
+		else if(strcmp(card->cid.prod_name, emmc2_id) == 0)
+		{
+			strcpy(card->cid.prod_version, emmc2_name);
+		}
+		else if(strcmp(card->cid.prod_name, emmc3_id) == 0)
+		{
+			strcpy(card->cid.prod_version, emmc3_name);
+		}
+		else if(strcmp(card->cid.prod_name, emmc4_id) == 0)
+		{
+			strcpy(card->cid.prod_version, emmc4_name);
+		}
+		else if(strcmp(card->cid.prod_name, emmc5_id) == 0)
+		{
+			strcpy(card->cid.prod_version, emmc5_name);
+		}
+		else
+		{
+			strcpy(card->cid.prod_version, emmc_unknow);
+		}
 		break;
 
 	default:
@@ -836,6 +894,8 @@ MMC_DEV_ATTR(raw_rpmb_size_mult, "%#x\n", card->ext_csd.raw_rpmb_size_mult);
 MMC_DEV_ATTR(enhanced_rpmb_supported, "%#x\n",
 		card->ext_csd.enhanced_rpmb_supported);
 MMC_DEV_ATTR(rel_sectors, "%#x\n", card->ext_csd.rel_sectors);
+MMC_DEV_ATTR(version, "%s\n", card->cid.prod_version);
+MMC_DEV_ATTR(firmware_version, "0x%x\n", card->ext_csd.fw_version);
 
 static struct attribute *mmc_std_attrs[] = {
 	&dev_attr_cid.attr,
@@ -858,6 +918,8 @@ static struct attribute *mmc_std_attrs[] = {
 	&dev_attr_raw_rpmb_size_mult.attr,
 	&dev_attr_enhanced_rpmb_supported.attr,
 	&dev_attr_rel_sectors.attr,
+	&dev_attr_version.attr,
+	&dev_attr_firmware_version.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(mmc_std);
