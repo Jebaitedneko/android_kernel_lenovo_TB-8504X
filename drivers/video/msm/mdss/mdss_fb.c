@@ -84,7 +84,9 @@
 
 static struct fb_info *fbi_list[MAX_FBI_LIST];
 static int fbi_list_index;
-
+#ifdef CONFIG_KERNEL_CUSTOM_P3588
+u32 p3588_bl_level;
+#endif
 static u32 mdss_fb_pseudo_palette[16] = {
 	0x00000000, 0xffffffff, 0xffffffff, 0xffffffff,
 	0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
@@ -280,7 +282,10 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 {
 	struct msm_fb_data_type *mfd = dev_get_drvdata(led_cdev->dev->parent);
 	int bl_lvl;
-
+#if defined  CONFIG_KERNEL_CUSTOM_P3588
+/////mike_zhu add 20170317
+	int value_new =113; //mike_zhu add 20170317
+#endif
 	if (mfd->boot_notification_led) {
 		led_trigger_event(mfd->boot_notification_led, 0);
 		mfd->boot_notification_led = NULL;
@@ -288,7 +293,20 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 
 	if (value > mfd->panel_info->brightness_max)
 		value = mfd->panel_info->brightness_max;
-
+#if defined  CONFIG_KERNEL_CUSTOM_P3588 /////mike_zhu add 20170317
+pr_debug("%s:-old--value=%d", __func__, value);
+value_new=value;
+if(value_new >= 3)
+{
+value_new =(46*value_new)/51;
+value = value_new;
+}
+else
+{
+value=value;
+}
+pr_debug("%s:-old--value=%d,value_new=%d", __func__, value,value_new);
+#endif
 	/* This maps android backlight level 0 to 255 into
 	   driver backlight level 0 to bl_max with rounding */
 	MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
@@ -1823,6 +1841,9 @@ static int mdss_fb_blank_blank(struct msm_fb_data_type *mfd,
 		current_bl = mfd->bl_level;
 		mfd->allow_bl_update = true;
 		mdss_fb_set_backlight(mfd, 0);
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+		mdelay(50);
+#endif
 		mfd->allow_bl_update = false;
 		mfd->unset_bl_level = current_bl;
 		mutex_unlock(&mfd->bl_lock);

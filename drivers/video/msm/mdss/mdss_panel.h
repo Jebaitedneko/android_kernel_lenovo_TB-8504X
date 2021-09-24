@@ -62,7 +62,6 @@ enum fps_resolution {
 #define EDP_PANEL		12	/* LVDS */
 
 #define DSC_PPS_LEN		128
-
 /* HDR propeties count */
 #define DISPLAY_PRIMARIES_COUNT	8	/* WRGB x and y values*/
 
@@ -1097,6 +1096,19 @@ static inline u8 mdss_panel_calc_frame_rate(struct mdss_panel_info *pinfo)
  * controller.
  */
 struct mdss_panel_cfg *mdss_panel_intf_type(int intf_val);
+
+/**
+ * mdss_panel_get_boot_cfg() - checks if bootloader config present
+ *
+ * Function returns true if bootloader has configured the parameters
+ * for primary controller and panel config data.
+ *
+ * returns true if bootloader configured, else false
+ */
+#ifdef CONFIG_KERNEL_CUSTOM_P3590
+int mdss_panel_get_boot_cfg(void);
+#endif
+
 
 /**
  * mdss_is_ready() - checks if mdss is probed and ready

@@ -432,6 +432,9 @@ struct mdss_dsi_ctrl_pdata {
 	int rst_gpio;
 	int disp_en_gpio;
 	int bklt_en_gpio;
+#ifdef CONFIG_KERNEL_CUSTOM_P3590
+	int lcden_gpio;
+#endif
 	int mode_gpio;
 	int intf_mux_gpio;
 	int bklt_ctrl;	/* backlight ctrl */
