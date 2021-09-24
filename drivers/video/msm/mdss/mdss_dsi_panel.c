@@ -28,12 +28,79 @@
 #ifdef TARGET_HW_MDSS_HDMI
 #include "mdss_dba_utils.h"
 #endif
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+#include "mdss_panel.h"
+#endif
 #define DT_CMD_HDR 6
 #define MIN_REFRESH_RATE 48
 #define DEFAULT_MDP_TRANSFER_TIME 14000
 
 #define VSYNC_DELAY msecs_to_jiffies(17)
 
+#ifdef CONFIG_KERNEL_CUSTOM_P3588
+char *auo_panel_name = "rm68200 800p video mode dsi panel";
+int compare_tp_id = 0;
+int compare_lcd_id = 0;
+int  ID0_status = 0,ID1_status = 0;
+#endif
+
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+	char *boent_panel_name = "boent51021 1200p video mode dsi panel";
+	int lcd_panel_num = 0;
+#endif
+#ifdef CONFIG_KERNEL_CUSTOM_P3588
+extern int compare_lcd_id;
+
+enum {
+	LCM_UNKNOW = 0,
+	LCM_AUO,
+	LCM_INX
+};
+
+static unsigned int lcm_type = LCM_UNKNOW;
+
+extern int is_inx_lcm(void);
+extern int is_auo_lcm(void);
+extern u32 p3588_bl_level;
+
+int is_inx_lcm(void)
+{
+	return (lcm_type == LCM_INX);
+}
+
+int is_auo_lcm(void)
+{
+	return (lcm_type == LCM_AUO);
+}
+
+static int
+config_lcm_type(const char *panel_name)
+{
+	printk("[%s], start \n", __func__);
+
+	if (!strcmp(panel_name,
+		"rm68200 800p video mode dsi panel")) {
+
+		lcm_type = LCM_AUO;
+		printk("rm68200 800p video mode dsi panel \n");
+	}
+	else if (!strcmp(panel_name,
+		"hx83100a 800p video mode dsi panel")) {
+
+		lcm_type = LCM_INX;
+		printk("hx83100a 800p video mode dsi panel \n");
+	}
+	else {
+		printk("unknow panel name \n");
+		return 0;
+	}
+
+	printk("[%s], done \n", __func__);
+	return 1;
+}
+
+#endif
+int tp_rst_gpio;
 DEFINE_LED_TRIGGER(bl_led_trigger);
 
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
@@ -210,36 +277,70 @@ static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
 
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+static char led_pwm1[2] = {0x9f, 0x0};	/* DTYPE_DCS_WRITE1 */
+static char led_pwm2[2] = {0x8F, 0xA5};	/* DTYPE_DCS_WRITE1 */
+static char led_pwm3[2] = {0x8F, 0x00};	/* DTYPE_DCS_WRITE1 */
+static char led_pwm4[2] = {0x83, 0xBB};
+static char led_pwm5[2] = {0x84, 0x22};
+static char led_pwm6[2] = {0x95, 0x20};
+static char led_pwm7[2] = {0x95, 0x11};
+static char led_pwm8[2] = {0x90, 0xC0};
+static struct dsi_cmd_desc backlight_cmd2 = {
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2)},
+	led_pwm2
+};
+static struct dsi_cmd_desc backlight_cmd3 = {
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm3)},
+	led_pwm3
+};
+
+static struct dsi_cmd_desc backlight_cmd4 = {
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm4)},
+	led_pwm4
+};
+static struct dsi_cmd_desc backlight_cmd5 = {
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm5)},
+	led_pwm5
+};
+static struct dsi_cmd_desc backlight_cmd6 = {
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm6)},
+	led_pwm6
+};
+static struct dsi_cmd_desc backlight_cmd7 = {
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm7)},
+	led_pwm7
+};
+static struct dsi_cmd_desc backlight_cmd8 = {
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm8)},
+	led_pwm8
+};
+#else
 static char led_pwm1[2] = {0x51, 0x0};	/* DTYPE_DCS_WRITE1 */
+
+//boe start
+static char led_pwm2[3] = {0x50, 0x5A,0x23};
+static char led_pwm3[3] = {0x90, 0xFF,0x0F};
+//static char led_pwm4[3] = {0x94, 0x2C, 0X01};
+static struct dsi_cmd_desc backlight_cmd2 = {
+	{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(led_pwm2)},
+	led_pwm2
+};
+static struct dsi_cmd_desc backlight_cmd3 = {
+	{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(led_pwm3)},
+	led_pwm3
+};
+/*static struct dsi_cmd_desc backlight_cmd4 = {
+	{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(led_pwm4)},
+	led_pwm4
+};
+*/
+//boe end
+#endif
 static struct dsi_cmd_desc backlight_cmd = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1)},
 	led_pwm1
 };
-
-static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
-{
-	struct dcs_cmd_req cmdreq;
-	struct mdss_panel_info *pinfo;
-
-	pinfo = &(ctrl->panel_data.panel_info);
-	if (pinfo->dcs_cmd_by_left) {
-		if (ctrl->ndx != DSI_CTRL_LEFT)
-			return;
-	}
-
-	pr_debug("%s: level=%d\n", __func__, level);
-
-	led_pwm1[1] = (unsigned char)level;
-
-	memset(&cmdreq, 0, sizeof(cmdreq));
-	cmdreq.cmds = &backlight_cmd;
-	cmdreq.cmds_cnt = 1;
-	cmdreq.flags = CMD_REQ_COMMIT;
-	cmdreq.rlen = 0;
-	cmdreq.cb = NULL;
-
-	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
-}
 
 static void mdss_dsi_panel_set_idle_mode(struct mdss_panel_data *pdata,
 							bool enable)
@@ -278,7 +379,6 @@ static void mdss_dsi_panel_set_idle_mode(struct mdss_panel_data *pdata,
 }
 
 static bool mdss_dsi_panel_get_idle_mode(struct mdss_panel_data *pdata)
-
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 
@@ -289,8 +389,110 @@ static bool mdss_dsi_panel_get_idle_mode(struct mdss_panel_data *pdata)
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 						panel_data);
 	return ctrl->idle;
-}
 
+ }
+#if defined(CONFIG_KERNEL_CUSTOM_P3588)
+static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
+{
+	struct dcs_cmd_req cmdreq;
+	struct mdss_panel_info *pinfo;
+
+	pinfo = &(ctrl->panel_data.panel_info);
+	if (pinfo->dcs_cmd_by_left) {
+		if (ctrl->ndx != DSI_CTRL_LEFT)
+			return;
+	}
+
+	pr_debug("%s: level=%d\n", __func__, level);
+	if(compare_lcd_id == 3){
+	////printk("andy.%s compare_lcd_id = %d\n",__func__,compare_lcd_id);
+		memset(&cmdreq, 0, sizeof(cmdreq));
+		cmdreq.cmds_cnt = 1;
+		cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
+		cmdreq.rlen = 0;
+		cmdreq.cb = NULL;
+
+		led_pwm3[1] = (unsigned char)((level & 0xff0)>>4);
+		led_pwm3[2] = (unsigned char)(level & 0x0f);
+		///printk("andy.%s led_pwm3[1]= 0x%x,led_pwm3[2]=0x%x\n",__func__,led_pwm3[1],led_pwm3[2]);
+
+		cmdreq.cmds = &backlight_cmd2;
+		mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+		cmdreq.cmds = &backlight_cmd3;
+		mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+		//cmdreq.cmds = &backlight_cmd4;
+		//mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+	}
+
+	led_pwm1[1] = (unsigned char)level;
+
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds = &backlight_cmd;
+	cmdreq.cmds_cnt = 1;
+	cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+
+	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+}
+#else
+static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
+{
+	struct dcs_cmd_req cmdreq;
+	struct mdss_panel_info *pinfo;
+
+	pinfo = &(ctrl->panel_data.panel_info);
+	if (pinfo->dcs_cmd_by_left) {
+		if (ctrl->ndx != DSI_CTRL_LEFT)
+			return;
+	}
+
+	pr_debug("%s: level=%d\n", __func__, level);
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds_cnt = 1;
+	cmdreq.flags = CMD_REQ_COMMIT;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+	if(lcd_panel_num==1){
+		cmdreq.cmds = &backlight_cmd2;
+		mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+		mdelay(1);
+	}else if(lcd_panel_num==2){
+		if(level==0){
+			cmdreq.cmds = &backlight_cmd4;
+			mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+
+			cmdreq.cmds = &backlight_cmd5;
+			mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+			mdelay(1);
+			cmdreq.cmds = &backlight_cmd7;
+			mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+			cmdreq.cmds = &backlight_cmd8;
+			mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+		}
+	}
+#endif
+	led_pwm1[1] = (unsigned char)level;
+	cmdreq.cmds = &backlight_cmd;
+	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+	if(lcd_panel_num==1){
+		cmdreq.cmds = &backlight_cmd3;
+		mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+	}else if(lcd_panel_num==2){
+		cmdreq.cmds = &backlight_cmd4;
+		mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+
+		cmdreq.cmds = &backlight_cmd5;
+		mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+		mdelay(1);
+		cmdreq.cmds = &backlight_cmd6;
+		mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+	}
+#endif
+}
+#endif
 static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
 	int rc = 0;
@@ -304,12 +506,24 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 			goto disp_en_gpio_err;
 		}
 	}
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+	if (gpio_is_valid(ctrl_pdata->rst_gpio)) {
+		rc = gpio_request(ctrl_pdata->rst_gpio, "disp_rst_n");
+		if (rc) {
+			pr_err("request reset gpio failed, rc=%d\n",
+				rc);
+			//goto rst_gpio_err;
+		}
+	}
+#else
 	rc = gpio_request(ctrl_pdata->rst_gpio, "disp_rst_n");
 	if (rc) {
 		pr_err("request reset gpio failed, rc=%d\n",
 			rc);
 		goto rst_gpio_err;
 	}
+#endif
+	tp_rst_gpio = ctrl_pdata->rst_gpio;
 
 	if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
 		rc = gpio_request(ctrl_pdata->bklt_en_gpio,
@@ -317,7 +531,9 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 		if (rc) {
 			pr_err("request bklt gpio failed, rc=%d\n",
 				       rc);
+#if !(defined CONFIG_KERNEL_CUSTOM_P3590)
 			goto bklt_en_gpio_err;
+#endif
 		}
 	}
 	if (gpio_is_valid(ctrl_pdata->mode_gpio)) {
@@ -325,11 +541,13 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 		if (rc) {
 			pr_err("request panel mode gpio failed,rc=%d\n",
 								rc);
+#if !(defined CONFIG_KERNEL_CUSTOM_P3590)
 			goto mode_gpio_err;
+#endif
 		}
 	}
 	return rc;
-
+#if !(defined CONFIG_KERNEL_CUSTOM_P3590)
 mode_gpio_err:
 	if (gpio_is_valid(ctrl_pdata->bklt_en_gpio))
 		gpio_free(ctrl_pdata->bklt_en_gpio);
@@ -338,6 +556,7 @@ bklt_en_gpio_err:
 rst_gpio_err:
 	if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
 		gpio_free(ctrl_pdata->disp_en_gpio);
+#endif
 disp_en_gpio_err:
 	return rc;
 }
@@ -403,7 +622,9 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 	if (!gpio_is_valid(ctrl_pdata->rst_gpio)) {
 		pr_debug("%s:%d, reset line not configured\n",
 			   __func__, __LINE__);
+#if !(defined CONFIG_KERNEL_CUSTOM_P3590)
 		return rc;
+#endif
 	}
 
 	pr_debug("%s: enable = %d\n", __func__, enable);
@@ -426,6 +647,14 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 				gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
 				usleep_range(100, 110);
 			}
+
+	#ifdef CONFIG_KERNEL_CUSTOM_P3588
+		if (compare_lcd_id ==3)
+			{
+			  gpio_direction_output(64,1);
+			  mdelay(1);
+			}
+	#endif
 
 			if (pdata->panel_info.rst_seq_len) {
 				rc = gpio_direction_output(ctrl_pdata->rst_gpio,
@@ -487,6 +716,16 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			gpio_free(ctrl_pdata->disp_en_gpio);
 		}
 		gpio_set_value((ctrl_pdata->rst_gpio), 0);
+
+
+	#ifdef CONFIG_KERNEL_CUSTOM_P3588
+		if (compare_lcd_id ==3)
+			{
+			  gpio_direction_output(64,0);
+			  mdelay(1);
+			}
+	#endif
+
 		gpio_free(ctrl_pdata->rst_gpio);
 		if (gpio_is_valid(ctrl_pdata->mode_gpio))
 			gpio_free(ctrl_pdata->mode_gpio);
@@ -788,7 +1027,12 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 		pr_err("%s: Invalid input data\n", __func__);
 		return;
 	}
-
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+	if (!mdss_panel_get_boot_cfg()) {
+		bl_level = 0;
+		pr_err("%s: not connect LCD found in lk cmdline,set bl_level to 0\n", __func__);
+	}
+#endif
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
@@ -800,7 +1044,6 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 
 	if ((bl_level < pdata->panel_info.bl_min) && (bl_level != 0))
 		bl_level = pdata->panel_info.bl_min;
-
 	switch (ctrl_pdata->bklt_ctrl) {
 	case BL_WLED:
 		led_trigger_event(bl_led_trigger, bl_level);
@@ -886,9 +1129,17 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	pr_debug("%s: ndx=%d cmd_cnt=%d\n", __func__,
 				ctrl->ndx, on_cmds->cmd_cnt);
-
+#if defined(CONFIG_KERNEL_CUSTOM_P3588)
+	if (is_inx_lcm()) {
+		printk("mdelay 50 ms \n");
+		mdelay(50);
+	}
+#endif
 	if (on_cmds->cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, on_cmds, CMD_REQ_COMMIT);
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+        mdelay(10);
+#endif
 
 	if (pinfo->compression_mode == COMPRESSION_DSC)
 		mdss_dsi_panel_dsc_pps_send(ctrl, pinfo);
@@ -2331,7 +2582,41 @@ void mdss_dsi_unregister_bl_settings(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 	if (ctrl_pdata->bklt_ctrl == BL_WLED)
 		led_trigger_unregister_simple(bl_led_trigger);
 }
-
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+int  mdss_dsi_panel_lcden_gpio_ctrl(struct mdss_dsi_ctrl_pdata *ctrl_pdata, int on)
+{
+	int rc = 0;
+	if(ctrl_pdata == NULL )return -1;
+	if(ctrl_pdata->lcden_gpio <= 0 )return -1;
+	if(on){
+		if (gpio_is_valid(ctrl_pdata->lcden_gpio)) {
+			rc = gpio_request(ctrl_pdata->lcden_gpio, "lcd_en");
+			if (rc) {
+				pr_err("request lcd_en gpio failed, rc=%d\n", rc);
+				//return rc;
+			}
+		}
+		if (gpio_is_valid(ctrl_pdata->lcden_gpio)){
+			gpio_direction_output(ctrl_pdata->lcden_gpio, 1);
+			gpio_set_value((ctrl_pdata->lcden_gpio), 1);
+			if(lcd_panel_num == 1)
+				mdelay(18);
+			else if(lcd_panel_num == 2)
+				mdelay(15);
+		}
+	}else{
+		if(lcd_panel_num == 1)
+			mdelay(20);
+		else if(lcd_panel_num == 2)
+			mdelay(10);
+		if (gpio_is_valid(ctrl_pdata->lcden_gpio)){
+			gpio_set_value((ctrl_pdata->lcden_gpio), 0);
+			gpio_free(ctrl_pdata->lcden_gpio);
+		}
+	}
+	return rc;
+}
+#endif
 static int mdss_dsi_panel_timing_from_dt(struct device_node *np,
 		struct dsi_panel_timing *pt,
 		struct mdss_panel_data *panel_data)
@@ -2659,7 +2944,10 @@ static int mdss_panel_parse_dt(struct device_node *np,
 		else if (!strcmp(data, "vflip"))
 			pinfo->panel_orientation = MDP_FLIP_UD;
 	}
-
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+	ctrl_pdata->lcden_gpio = of_get_named_gpio(np,
+		"qcom,mdss-dsi-lcden-ctrl", 0);
+#endif
 	rc = of_property_read_u32(np, "qcom,mdss-brightness-max-level", &tmp);
 	pinfo->brightness_max = (!rc ? tmp : MDSS_MAX_BL_BRIGHTNESS);
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-bl-min-level", &tmp);
@@ -2843,7 +3131,9 @@ static int mdss_panel_parse_dt(struct device_node *np,
 error:
 	return -EINVAL;
 }
-
+#ifdef CONFIG_KERNEL_CUSTOM_P3588
+static struct mdss_dsi_ctrl_pdata *esd_ctrl;
+#endif
 int mdss_dsi_panel_init(struct device_node *node,
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 	int ndx)
@@ -2867,6 +3157,20 @@ int mdss_dsi_panel_init(struct device_node *node,
 						__func__, __LINE__);
 	} else {
 		pr_info("%s: Panel Name = %s\n", __func__, panel_name);
+		#ifdef CONFIG_KERNEL_CUSTOM_P3588
+		config_lcm_type(panel_name);
+
+		if(!strcmp(auo_panel_name, panel_name))
+			compare_tp_id = 1;
+		else
+			compare_tp_id = 2;
+		#endif
+		#if defined(CONFIG_KERNEL_CUSTOM_P3590)
+			if(!strcmp(boent_panel_name,panel_name))
+				lcd_panel_num = 2;
+			else
+				lcd_panel_num = 1;
+		#endif
 		strlcpy(&pinfo->panel_name[0], panel_name, MDSS_MAX_PANEL_LEN);
 	}
 	rc = mdss_panel_parse_dt(node, ctrl_pdata);
@@ -2889,5 +3193,59 @@ int mdss_dsi_panel_init(struct device_node *node,
 			mdss_dsi_panel_apply_display_setting;
 	ctrl_pdata->switch_mode = mdss_dsi_panel_switch_mode;
 	ctrl_pdata->panel_data.get_idle = mdss_dsi_panel_get_idle_mode;
+
+	#ifdef CONFIG_KERNEL_CUSTOM_P3588
+	ID0_status = gpio_get_value(59);
+	ID1_status = gpio_get_value(66);
+	printk("swb.%s:get lcd_detect id0=%d,id1=%d\n", __func__,ID0_status,ID1_status);
+	if((ID0_status == 0)&&(ID1_status == 0)){
+		compare_lcd_id = 1;
+	}else if((ID0_status == 1)&&(ID1_status == 0)){
+		compare_lcd_id = 2;
+	}else{
+		compare_lcd_id = 3;
+	}
+	#endif
+
 	return 0;
 }
+
+#ifdef CONFIG_KERNEL_CUSTOM_P3588
+/*lct--lyh--add for esd check start*/
+void HX_report_ESD_event(void)
+{
+	struct dcs_cmd_req cmdreq;
+//	int level = 255;
+	if (p3588_bl_level < 5)
+	p3588_bl_level = p3588_bl_level + 1;
+	led_pwm1[1] = (unsigned char)p3588_bl_level;
+
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds = &backlight_cmd;
+	cmdreq.cmds_cnt = 1;
+	cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+
+	if (esd_ctrl->off_cmds.cmd_cnt)
+	{	printk("[lyh] down cmd off!\n");
+		mdss_dsi_panel_cmds_send(esd_ctrl, &esd_ctrl->off_cmds, CMD_REQ_COMMIT);
+	}
+	//gpio_set_value(tp_rst_gpio, 0);
+	//mdelay(20);
+	gpio_set_value(tp_rst_gpio, 1);
+	mdelay(20);
+	gpio_set_value(tp_rst_gpio, 0);
+	mdelay(20);
+	gpio_set_value(tp_rst_gpio, 1);
+	mdelay(50);
+	if (esd_ctrl->on_cmds.cmd_cnt) {
+		printk("[lyh] down cmd on!\n");
+		mdss_dsi_panel_cmds_send(esd_ctrl, &esd_ctrl->on_cmds, CMD_REQ_COMMIT);
+	}
+
+	mdss_dsi_cmdlist_put(esd_ctrl, &cmdreq);
+
+}
+/*lct--lyh--add for esd check end*/
+#endif
