@@ -22,6 +22,46 @@
 		#interrupt-cells = <2>;
 
 #include "msm8917-camera-pinctrl.dtsi"
+	smb_int_pin {
+			smb_int_default: smb_int_default {
+				mux {
+					pins = "gpio61";
+					function ="gpio";
+				};
+				config {
+					pins = "gpio61";
+					drive-strength = <2>;   /* 2 MA */
+					bias-pull-up;           /* PULL UP*/
+				};
+			};
+			smb_int_sleep: smb_int_sleep {
+				mux {
+					pins = "gpio61";
+					function ="gpio";
+				};
+				config {
+					pins = "gpio61";
+					drive-strength = <2>;   /* 2 MA */
+					bias-pull-up;           /* PULL UP*/
+				};
+			};
+		};
+
+		gpio_led_pins {
+			gpio_led_off: led_off {
+				mux {
+					pins = "gpio23", "gpio25";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio23", "gpio25";
+					drive-strength = <2>;
+					bias-disable; /* no pullup */
+					output-low;
+				};
+			};
+		};
 
 		/* add pingrp for touchscreen */
 		pmx_ts_int_active {
@@ -269,24 +309,24 @@
 		pmx_mdss_te {
 			mdss_te_active: mdss_te_active {
 				mux {
-					pins = "gpio24";
+					pins = "gpio50";
 					function = "mdp_vsync";
 				};
 
 				config {
-					pins = "gpio24";
+					pins = "gpio50";
 					drive-strength = <2>; /* 8 mA */
 					bias-pull-down; /* pull down*/
 				};
 			};
 			mdss_te_suspend: mdss_te_suspend {
 				mux {
-					pins = "gpio24";
+					pins = "gpio50";
 					function = "mdp_vsync";
 				};
 
 				config {
-					pins = "gpio24";
+					pins = "gpio50";
 					drive-strength = <2>; /* 2 mA */
 					bias-pull-down; /* pull down */
 				};
@@ -633,6 +673,22 @@
 			};
 		};
 
+	    usb-id-pin {
+                 usbid_default: cd-on{
+					mux {
+					pins = "gpio12";
+					function = "gpio";
+				   };
+					config {
+					pins = "gpio12";
+					drive-strength = <8>;
+					bias-disable; /* NO pull *///bias-pull-up;
+					input-enable;
+				   };
+
+		     };
+
+                };
 		pmx_sdc2_clk {
 			sdc2_clk_on: sdc2_clk_on {
 				config {
@@ -846,16 +902,124 @@
 				};
 			};
 		};
+	spkl_ext_pa {
+			spkl_ext_pa_sus: spkl_ext_pa_sus {
+				mux {
+					pins = "gpio20";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio20";
+				    drive-strength = <2>;
+				    output-low;
+				    bias-pull-down;
+				   // bias-disable;
+				};
+			};
+			spkl_ext_pa_act: spkl_ext_pa_act {
+				mux {
+					pins = "gpio20";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio20";
+				    drive-strength = <8>;
+					output-high;
+					bias-pull-up;
+					//bias-disable;
+				};
+			};
+		};
+		spkr_ext_pa {
+			spkr_ext_pa_sus: spkr_ext_pa_sus {
+				mux {
+					pins = "gpio24";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio24";
+				    drive-strength = <2>;
+				    output-low;
+				    bias-pull-down;
+				 //   bias-disable;
+				};
+			};
+			spkr_ext_pa_act: spkr_ext_pa_act {
+				mux {
+					pins = "gpio24";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio24";
+				    drive-strength = <8>;
+					output-high;
+					bias-pull-up;
+					//bias-disable;
+				};
+			};
+		};
 
-		cross-conn-det {
-			cross_conn_det_act: lines_on {
+		spk_hs_switch {
+			spk_hs_switch_act: spk_hs_switch_act {
+				mux {
+					pins = "gpio91";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio91";
+				    drive-strength = <8>;
+				    bias-disable;
+				    //output-high;
+				};
+			};
+			spk_hs_switch_sus: spk_hs_switch_sus {
+				mux {
+					pins = "gpio91";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio91";
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+		};
+
+		spk_rec_switch {
+			spk_rec_switch_act: spk_rec_switch_act {
 				mux {
 					pins = "gpio63";
 					function = "gpio";
 				};
-
+				config {
+			        pins = "gpio63";
+					drive-strength = <8>;
+					bias-disable;
+					//output-high;
+				};
+			};
+			spk_rec_switch_sus: spk_rec_switch_sus {
+				mux {
+					pins = "gpio63";
+					function = "gpio";
+				};
 				config {
 					pins = "gpio63";
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+		};
+
+		cross-conn-det {
+			cross_conn_det_act: lines_on {
+				mux {
+					pins = "gpio48";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio48";
 					drive-strength = <8>;
 					output-low;
 					bias-pull-down;
@@ -864,12 +1028,12 @@
 
 			cross_conn_det_sus: lines_off {
 				mux {
-					pins = "gpio63";
+					pins = "gpio48";
 					function = "gpio";
 				};
 
 				config {
-					pins = "gpio63";
+					pins = "gpio48";
 					drive-strength = <2>;
 					bias-pull-down;
 				};
