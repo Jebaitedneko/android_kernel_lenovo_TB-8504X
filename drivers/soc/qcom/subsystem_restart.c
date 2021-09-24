@@ -1107,7 +1107,9 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		pr_err("%s crashed during a system poweroff/shutdown.\n", name);
 		return -EBUSY;
 	}
-
+	//lc mike_zhu 20180829 add for ssr reboot
+	dev->restart_level = 1;
+	//end
 	pr_info("Restart sequence requested for %s, restart_level = %s.\n",
 		name, restart_levels[dev->restart_level]);
 
