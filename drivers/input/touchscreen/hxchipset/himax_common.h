@@ -34,6 +34,7 @@
 #include <linux/types.h>
 #include <linux/fs.h>
 #include <linux/buffer_head.h>
+#include <linux/wakelock.h>
 #include <linux/seq_file.h>
 #include <linux/proc_fs.h>
 #include "himax_platform.h"
@@ -48,7 +49,7 @@
 #ifdef CONFIG_OF
 #include <linux/of_gpio.h>
 #endif
-#define HIMAX_DRIVER_VER "0.2.4.0"
+#define HIMAX_DRIVER_VER "0.2.2.0"
 
 #define FLASH_DUMP_FILE "/data/user/Flash_Dump.bin"
 #define DIAG_COORDINATE_FILE "/sdcard/Coordinate_Dump.csv"
@@ -68,17 +69,18 @@ int himax_touch_proc_init(void);
 void himax_touch_proc_deinit(void);
 #endif
 
+extern int compare_tp_id;
 //===========Himax Option function=============
 //#define HX_RST_PIN_FUNC
-//#define HX_AUTO_UPDATE_FW
+#define HX_AUTO_UPDATE_FW
 //#define HX_HIGH_SENSE
 //#define HX_SMART_WAKEUP
 //#define HX_USB_DETECT
-//#define HX_ESD_WORKAROUND
-//#define HX_USB_DETECT2
+#define HX_ESD_WORKAROUND
+#define HX_USB_DETECT2
 
 //#define HX_EN_SEL_BUTTON		       // Support Self Virtual key		,default is close
-#define HX_EN_MUT_BUTTON		    // Support Mutual Virtual Key	,default is close
+#define HX_EN_MUT_BUTTON		       // Support Mutual Virtual Key	,default is close
 
 #define HX_KEY_MAX_COUNT             4			
 #define DEFAULT_RETRY_CNT            3
@@ -181,8 +183,6 @@ struct himax_config {
 
 struct himax_ts_data {
 	bool suspended;
-	bool probe_done;
-	struct mutex fb_mutex;
 	atomic_t suspend_mode;
 	uint8_t x_channel;
 	uint8_t y_channel;
@@ -230,6 +230,8 @@ struct himax_ts_data {
 	
 #if defined(CONFIG_FB)
 	struct notifier_block fb_notif;
+	struct workqueue_struct *himax_att_wq;
+	struct delayed_work work_att;
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 	struct early_suspend early_suspend;
 #endif
@@ -265,12 +267,6 @@ struct himax_ts_data {
 	uint8_t usb_connected;
 	uint8_t *cable_config;
 #endif
-
-	/* pinctrl data */
-	struct pinctrl *ts_pinctrl;
-	struct pinctrl_state *pinctrl_state_active;
-	struct pinctrl_state *pinctrl_state_suspend;
-	struct pinctrl_state *pinctrl_state_release;
 };
 
 #define HX_CMD_NOP					 0x00	
@@ -325,8 +321,8 @@ void himax_set_HSEN_func(struct i2c_client *client,uint8_t HSEN_enable);
 static int gest_pt_cnt;
 static int gest_pt_x[GEST_PT_MAX_NUM];
 static int gest_pt_y[GEST_PT_MAX_NUM];
-static int gest_start_x,gest_start_y,gest_end_x,gest_end_y;
-static int gest_width,gest_height,gest_mid_x,gest_mid_y;
+static int gest_start_x=0,gest_start_y=0,gest_end_x=0,gest_end_y=0;
+static int gest_width=0,gest_height=0,gest_mid_x=0,gest_mid_y=0;
 static int gn_gesture_coor[16];
 #endif
 

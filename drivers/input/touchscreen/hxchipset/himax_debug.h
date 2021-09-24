@@ -24,12 +24,12 @@
 	#define HIMAX_PROC_INT_EN_FILE		"int_en"
 	#define HIMAX_PROC_LAYOUT_FILE		"layout"
 
-	static struct proc_dir_entry *himax_touch_proc_dir;
-	static struct proc_dir_entry *himax_proc_debug_level_file;
-	static struct proc_dir_entry *himax_proc_vendor_file;
-	static struct proc_dir_entry *himax_proc_attn_file;
-	static struct proc_dir_entry *himax_proc_int_en_file;
-	static struct proc_dir_entry *himax_proc_layout_file;
+	static struct proc_dir_entry *himax_touch_proc_dir 			= NULL;
+	static struct proc_dir_entry *himax_proc_debug_level_file 	= NULL;
+	static struct proc_dir_entry *himax_proc_vendor_file 		= NULL;
+	static struct proc_dir_entry *himax_proc_attn_file 			= NULL;
+	static struct proc_dir_entry *himax_proc_int_en_file 		= NULL;
+	static struct proc_dir_entry *himax_proc_layout_file 		= NULL;
 
 	uint8_t HX_PROC_SEND_FLAG;
 
@@ -39,21 +39,21 @@ bool getFlashDumpGoing(void);
 
 #ifdef HX_TP_PROC_REGISTER
 	#define HIMAX_PROC_REGISTER_FILE	"register"
-	struct proc_dir_entry *himax_proc_register_file;
+	struct proc_dir_entry *himax_proc_register_file = NULL;
 	uint8_t register_command[4];
 #endif
 
 #ifdef HX_TP_PROC_DIAG
 	#define HIMAX_PROC_DIAG_FILE	"diag"
-	struct proc_dir_entry *himax_proc_diag_file;
+	struct proc_dir_entry *himax_proc_diag_file = NULL;
 	#define HIMAX_PROC_DIAG_ARR_FILE	"diag_arr"
-	struct proc_dir_entry *himax_proc_diag_arrange_file;
+	struct proc_dir_entry *himax_proc_diag_arrange_file = NULL;
 
 #ifdef HX_TP_PROC_2T2R
-	static bool Is_2T2R;
-	static uint8_t x_channel_2;
-	static uint8_t y_channel_2;
-	static uint8_t *diag_mutual_2;
+	static bool Is_2T2R = false;
+	static uint8_t x_channel_2 = 0;
+	static uint8_t y_channel_2 = 0;
+	static uint8_t *diag_mutual_2 = NULL;
 	
 	int16_t *getMutualBuffer_2(void);
 	uint8_t 	getXChannel_2(void);
@@ -63,14 +63,14 @@ bool getFlashDumpGoing(void);
 	void 	setXChannel_2(uint8_t x);
 	void 	setYChannel_2(uint8_t y);
 #endif
-	uint8_t x_channel;
-	uint8_t y_channel;
-	int16_t *diag_mutual;
-	int16_t *diag_mutual_new;
-	int16_t *diag_mutual_old;
-	uint8_t diag_max_cnt;
+	uint8_t x_channel 		= 0;
+	uint8_t y_channel 		= 0;
+	int16_t *diag_mutual = NULL;
+	int16_t *diag_mutual_new = NULL;
+	int16_t *diag_mutual_old = NULL;
+	uint8_t diag_max_cnt = 0;
 
-	int diag_command;
+	int diag_command = 0;
 	uint8_t diag_coor[128];// = {0xFF};
 	int16_t diag_self[100] = {0};
 
@@ -178,4 +178,3 @@ uint8_t HX_SMWP_EN = 0;
 #endif
 
 #endif
-

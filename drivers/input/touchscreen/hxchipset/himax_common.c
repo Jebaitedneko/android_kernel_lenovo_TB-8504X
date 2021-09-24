@@ -16,14 +16,18 @@
 #include "himax_common.h"
 #include "himax_ic.h"
 
+#include "../lct_tp_fm_info.h"
+#include "../lct_ctp_upgrade.h"
+
+
 #define SUPPORT_FINGER_DATA_CHECKSUM 0x0F
 #define TS_WAKE_LOCK_TIMEOUT		(2 * HZ)
 #define FRAME_COUNT 5
-
+extern int compare_lcd_id;
 #if defined(HX_AUTO_UPDATE_FW)
 	static unsigned char i_CTPM_FW[]=
 	{
-		#include "HX83100_Amber_0901_030B.i"
+		#include "20180518_HX83100-A_Innolux_FW_01_42_0B_0F_LCR.i"		//updated by TZB
 	};
 #endif
 
@@ -38,7 +42,9 @@
 struct himax_ts_data *private_ts;
 struct himax_ic_data* ic_data;
 
-static int		HX_TOUCH_INFO_POINT_CNT;
+static unsigned char upgrade_fw[128*1024];
+
+static int		HX_TOUCH_INFO_POINT_CNT   = 0;
 
 #ifdef HX_AUTO_UPDATE_FW
 extern unsigned long	FW_VER_MAJ_FLASH_ADDR;
@@ -57,7 +63,7 @@ extern unsigned char	IC_CHECKSUM;
 extern int himax_touch_proc_init(void);
 extern void himax_touch_proc_deinit(void);
 //PROC-START
-#ifdef HX_TP_PROC_FLASH_DUMP
+#ifdef  HX_TP_PROC_FLASH_DUMP
 extern void	himax_ts_flash_func(void);
 extern void setFlashBuffer(void);
 extern bool getFlashDumpGoing(void);
@@ -65,9 +71,6 @@ extern uint8_t getSysOperation(void);
 extern void setSysOperation(uint8_t operation);
 #endif
 
-#ifdef HX_TP_PROC_HITOUCH
-extern bool hitouch_is_connect;
-#endif
 
 #ifdef HX_TP_PROC_DIAG
 	extern int touch_monitor_stop_flag;
@@ -102,19 +105,18 @@ extern bool hitouch_is_connect;
 
 extern int himax_parse_dt(struct himax_ts_data *ts,
 				struct himax_i2c_platform_data *pdata);
-extern int himax_ts_pinctrl_init(struct himax_ts_data *ts);
 
-static uint8_t 	vk_press;
-static uint8_t 	AA_press;
-static uint8_t 	EN_NoiseFilter;
-static uint8_t	Last_EN_NoiseFilter;
-static int	hx_point_num;																	// for himax_ts_work_func use
+static uint8_t 	vk_press = 0x00;
+static uint8_t 	AA_press = 0x00;
+static uint8_t 	EN_NoiseFilter = 0x00;
+static uint8_t	Last_EN_NoiseFilter = 0x00;
+static int	hx_point_num	= 0;																	// for himax_ts_work_func use
 static int	p_point_num	= 0xFFFF;
-static int	tpd_key;
-static int	tpd_key_old;
-static int	probe_fail_flag;
-static bool	config_load;
-static struct himax_config *config_selected;
+static int	tpd_key	   	= 0x00;
+static int	tpd_key_old	= 0x00;
+static int	probe_fail_flag	= 0;
+static bool	config_load		= false;
+static struct himax_config *config_selected = NULL;
 
 //static int iref_number = 11;
 //static bool iref_found = false;    
@@ -130,6 +132,112 @@ int fb_notifier_callback(struct notifier_block *self,
 static void himax_ts_early_suspend(struct early_suspend *h);
 static void himax_ts_late_resume(struct early_suspend *h);
 #endif
+
+//lct--lyh--add tp info start
+static char dev_info[100];
+
+static void lct_tp_info(char *module)
+{
+    char info[50] = {0};
+    static bool initialized = false;
+    if(module && initialized)
+	return;
+
+   snprintf(info, sizeof(info), "[fw]0x%4.4x,[ic]hx83100", ic_data->vendor_config_ver);
+   snprintf(dev_info, sizeof(dev_info), "[Vendor]%s,[fw]0x%4.4x,[ic]hx83100", module, ic_data->vendor_config_ver);
+   if(!module)
+	update_tp_fm_info(info);
+   else {
+	init_tp_fm_info(0, info, module);
+        initialized = true;
+   }
+
+}
+
+static void lct_get_tp_info(char *tp_info)
+{
+	if(tp_info == NULL)
+		return;
+	sprintf(tp_info,"%s", dev_info);
+}
+//lct--lyh--add tp info end
+
+//lct--lyh--add firmware upgrade for engineermode start
+static int ctp_upgrade_from_engineermode(void)
+{
+	struct file *pfile = NULL;
+	struct inode *inode;
+	int fsize = 0;
+	int result = 0;
+	u8 *pbt_buf = NULL;
+	mm_segment_t old_fs;
+
+
+
+	char *filepath = "/mnt/sdcard/CTP_FW.bin";
+
+	pfile = filp_open(filepath, O_RDONLY, 0);
+	if (IS_ERR(pfile)) {
+		printk("error occured while opening file %s.\n",filepath);
+		//strcpy(ctp_upgrade_status,"File no exist");
+		lct_set_ctp_upgrade_status("File no exist");
+		return -1;
+	}
+	inode = pfile->f_dentry->d_inode;
+	fsize = inode->i_size;
+
+	printk("ctp_upgrade_from_engineermode fsize = %d\n",fsize);
+
+	if(fsize <= 0)
+	{
+		//strcpy(ctp_upgrade_status,"File size err");
+		lct_set_ctp_upgrade_status("File size err");
+		return -1;
+	}
+	filp_close(pfile,NULL);
+
+	//read firmware
+
+	pbt_buf = kmalloc(fsize + 1, GFP_ATOMIC);
+
+	if(pbt_buf == NULL)
+	{
+		lct_set_ctp_upgrade_status("Malloc fail");
+		return -1;
+	}
+
+	pfile = filp_open(filepath, O_RDONLY, 0);
+
+	old_fs = get_fs();
+	set_fs(get_fs());
+
+	result=pfile->f_op->read(pfile,upgrade_fw,sizeof(upgrade_fw), &pfile->f_pos);
+	if (result < 0)
+	{
+		E("%s: read firmware file failed\n", __func__);
+		return -1;
+	}
+
+	set_fs(old_fs);
+	filp_close(pfile, NULL);
+
+	if(result > 0)
+	{
+		himax_int_enable(private_ts->client->irq,0);
+		if (fts_ctpm_fw_upgrade_with_sys_fs_64k(private_ts->client,upgrade_fw, result, false) == 0)
+		{
+			lct_set_ctp_upgrade_status("Failed");;
+		}
+		else
+		{
+			lct_set_ctp_upgrade_status("Success");
+		}
+		himax_int_enable(private_ts->client->irq,1);
+	}
+
+	return 0;
+}
+//lct--lyh--add firmware upgrade for engineermode end
 
 int himax_input_register(struct himax_ts_data *ts)
 {
@@ -231,14 +339,14 @@ static int himax_read_Sensor_ID(struct i2c_client *client)
 	
 	data[0] = 0x56; data[1] = 0x02; data[2] = 0x02;/*ID pin PULL High*/
 	i2c_himax_master_write(client, &data[0],3,normalRetry);
-	usleep_range(1000, 2000);
+	msleep(1);
 
 	//read id pin high
 	i2c_himax_read(client, 0x57, val_high, 1, normalRetry);
 
 	data[0] = 0x56; data[1] = 0x01; data[2] = 0x01;/*ID pin PULL Low*/
 	i2c_himax_master_write(client, &data[0],3,normalRetry);
-	usleep_range(1000, 2000);
+	msleep(1);
 
 	//read id pin low
 	i2c_himax_read(client, 0x57, val_low, 1, normalRetry);
@@ -260,28 +368,28 @@ static int himax_read_Sensor_ID(struct i2c_client *client)
 		{
 			data[0] = 0x56; data[1] = 0x02; data[2] = 0x01;/*ID pin PULL High,Low*/
 			i2c_himax_master_write(client, &data[0],3,normalRetry);
-			usleep_range(1000, 2000);
+			msleep(1);
 
 		}
 	else if((ID0!=0x04)&&(ID1==0x04))
 		{
 			data[0] = 0x56; data[1] = 0x01; data[2] = 0x02;/*ID pin PULL Low,High*/
 			i2c_himax_master_write(client, &data[0],3,normalRetry);
-			usleep_range(1000, 2000);
+			msleep(1);
 
 		}
 	else if((ID0==0x04)&&(ID1==0x04))
 		{
 			data[0] = 0x56; data[1] = 0x02; data[2] = 0x02;/*ID pin PULL High,High*/
 			i2c_himax_master_write(client, &data[0],3,normalRetry);
-			usleep_range(1000, 2000);
+			msleep(1);
 
 		}
 	sensor_id=(ID1<<4)|ID0;
 
 	data[0] = 0xE4; data[1] = sensor_id;
 	i2c_himax_master_write(client, &data[0],2,normalRetry);/*Write to MCU*/
-	usleep_range(1000, 2000);
+	msleep(1);
 
 	return sensor_id;
 
@@ -436,7 +544,7 @@ int himax_loadSensorConfig(struct i2c_client *client, struct himax_i2c_platform_
 
 	if (!client) {
 		E("%s: Necessary parameters client are null!\n", __func__);
-		return -EINVAL;
+		return -1;
 	}
 
 	if(config_load == false)
@@ -444,7 +552,7 @@ int himax_loadSensorConfig(struct i2c_client *client, struct himax_i2c_platform_
 			config_selected = kzalloc(sizeof(*config_selected), GFP_KERNEL);
 			if (config_selected == NULL) {
 				E("%s: alloc config_selected fail!\n", __func__);
-				return -ENOMEM;
+				return -1;
 			}
 		}
 
@@ -930,6 +1038,8 @@ void himax_ts_work(struct himax_ts_data *ts)
 	int RawDataLen = 0;
 	//coordinate dump start
 	char coordinate_char[15+(ic_data->HX_MAX_PT+5)*2*5+2];
+	struct timeval t;
+	struct tm broken;
 	//coordinate dump end
 #endif
 
@@ -1288,6 +1398,19 @@ bypass_checksum_failed_packet:
 				if (ts->debug_log_level & BIT(1))
 					I("All Finger leave\n");
 
+#ifdef HX_TP_PROC_DIAG
+					//coordinate dump start
+					if (coordinate_dump_enable == 1)
+					{
+						do_gettimeofday(&t);
+						time_to_tm(t.tv_sec, 0, &broken);
+
+						sprintf(&coordinate_char[0], "%2d:%2d:%2d:%lu,", broken.tm_hour, broken.tm_min, broken.tm_sec, t.tv_usec/1000);
+						sprintf(&coordinate_char[15], "Touch up!");
+						coordinate_fn->f_op->write(coordinate_fn,&coordinate_char[0],15 + (ic_data->HX_MAX_PT+5)*2*sizeof(char)*5 + 2,&coordinate_fn->f_pos);
+					}
+					//coordinate dump end
+#endif
 			}
 			else if (tpd_key != 0x00) {
 				himax_ts_button_func(tpd_key,ts);
@@ -1402,17 +1525,23 @@ void himax_cable_detect_func(void)
 #endif
 
 #ifdef CONFIG_FB
-int himax_fb_register(struct himax_ts_data *ts)
+static void himax_fb_register(struct work_struct *work)
 {
 	int ret = 0;
-
+	struct himax_ts_data *ts = container_of(work, struct himax_ts_data,
+							work_att.work);
 	I(" %s in", __func__);
+
+	//lct--lyh--add tp info
+	lct_tp_info("HIMAX");
+
+	//lct--lyh--add for factory firmware upgrade
+	lct_ctp_upgrade_int(ctp_upgrade_from_engineermode, lct_get_tp_info);
+
 	ts->fb_notif.notifier_call = fb_notifier_callback;
 	ret = fb_register_client(&ts->fb_notif);
 	if (ret)
 		E(" Unable to register fb_notifier: %d\n", ret);
-
-	return ret;
 }
 #endif
 
@@ -1462,204 +1591,14 @@ static void himax_ts_diag_work_func(struct work_struct *work)
 }
 #endif
 
-void himax_ts_init(struct himax_ts_data *ts)
-{
-	int ret = 0, err = 0;
-	struct himax_i2c_platform_data *pdata;
-	struct i2c_client *client;
-
-	client = ts->client;
-	pdata = ts->pdata;
-
-	I("%s: Start.\n", __func__);
-
-	/* Set pinctrl in active state */
-	if (ts->ts_pinctrl) {
-		ret = pinctrl_select_state(ts->ts_pinctrl,
-					ts->pinctrl_state_active);
-		if (ret < 0) {
-			E("Failed to set pin in active state %d",ret);
-		}
-	}
-
-	himax_burst_enable(client, 0);
-
-	//Get Himax IC Type / FW information / Calculate the point number
-	if (himax_check_chip_version(ts->client) == false) {
-		E("Himax chip doesn NOT EXIST");
-		goto err_ic_package_failed;
-	}
-	if (himax_ic_package_check(ts->client) == false) {
-		E("Himax chip doesn NOT EXIST");
-		goto err_ic_package_failed;
-	}
-
-	if (pdata->virtual_key)
-		ts->button = pdata->virtual_key;
-#ifdef  HX_TP_PROC_FLASH_DUMP
-	ts->flash_wq = create_singlethread_workqueue("himax_flash_wq");
-	if (!ts->flash_wq)
-	{
-		E("%s: create flash workqueue failed\n", __func__);
-		err = -ENOMEM;
-		goto err_create_wq_failed;
-	}
-
-	INIT_WORK(&ts->flash_work, himax_ts_flash_work_func);
-
-	setSysOperation(0);
-	setFlashBuffer();
-#endif
-
-#ifdef  HX_TP_PROC_DIAG
-	ts->himax_diag_wq = create_singlethread_workqueue("himax_diag");
-	if (!ts->himax_diag_wq)
-	{
-		E("%s: create diag workqueue failed\n", __func__);
-		err = -ENOMEM;
-		goto err_create_wq_failed;
-	}
-	INIT_DELAYED_WORK(&ts->himax_diag_delay_wrok, himax_ts_diag_work_func);
-#endif
-
-himax_read_FW_ver(client);
-
-#ifdef HX_AUTO_UPDATE_FW
-	I(" %s in", __func__);
-	if(i_update_FW() == false)
-		I("NOT Have new FW=NOT UPDATE=\n");
-	else
-		I("Have new FW=UPDATE=\n");
-#endif
-
-	//Himax Power On and Load Config
-	if (himax_loadSensorConfig(client, pdata) < 0) {
-		E("%s: Load Sesnsor configuration failed, unload driver.\n", __func__);
-		goto err_detect_failed;
-	}
-
-	calculate_point_number();
-#ifdef HX_TP_PROC_DIAG
-	setXChannel(ic_data->HX_RX_NUM); // X channel
-	setYChannel(ic_data->HX_TX_NUM); // Y channel
-
-	setMutualBuffer();
-	setMutualNewBuffer();
-	setMutualOldBuffer();
-	if (getMutualBuffer() == NULL) {
-		E("%s: mutual buffer allocate fail failed\n", __func__);
-		return;
-	}
-#ifdef HX_TP_PROC_2T2R
-	if(Is_2T2R){
-		setXChannel_2(ic_data->HX_RX_NUM_2); // X channel
-		setYChannel_2(ic_data->HX_TX_NUM_2); // Y channel
-
-		setMutualBuffer_2();
-
-		if (getMutualBuffer_2() == NULL) {
-			E("%s: mutual buffer 2 allocate fail failed\n", __func__);
-			return;
-		}
-	}
-#endif
-#endif
-#ifdef CONFIG_OF
-	ts->power = pdata->power;
-#endif
-	ts->pdata = pdata;
-
-	ts->x_channel = ic_data->HX_RX_NUM;
-	ts->y_channel = ic_data->HX_TX_NUM;
-	ts->nFinger_support = ic_data->HX_MAX_PT;
-	//calculate the i2c data size
-	calcDataSize(ts->nFinger_support);
-	I("%s: calcDataSize complete\n", __func__);
-#ifdef CONFIG_OF
-	ts->pdata->abs_pressure_min = 0;
-	ts->pdata->abs_pressure_max = 200;
-	ts->pdata->abs_width_min = 0;
-	ts->pdata->abs_width_max = 200;
-	pdata->cable_config[0] = 0x90;
-	pdata->cable_config[1] = 0x00;
-#endif
-	ts->suspended = false;
-#if defined(HX_USB_DETECT)||defined(HX_USB_DETECT2)
-	ts->usb_connected = 0x00;
-	ts->cable_config = pdata->cable_config;
-#endif
-	ts->protocol_type = pdata->protocol_type;
-	I("%s: Use Protocol Type %c\n", __func__,
-	ts->protocol_type == PROTOCOL_TYPE_A ? 'A' : 'B');
-
-	ret = himax_input_register(ts);
-	if (ret) {
-		E("%s: Unable to register %s input device\n",
-			__func__, ts->input_dev->name);
-		goto err_input_register_device_failed;
-	}
-#ifdef HX_SMART_WAKEUP
-	ts->SMWP_enable=0;
-	wake_lock_init(&ts->ts_SMWP_wake_lock, WAKE_LOCK_SUSPEND, HIMAX_common_NAME);
-
-	ts->himax_smwp_wq = create_singlethread_workqueue("HMX_SMWP_WORK");
-	if (!ts->himax_smwp_wq) {
-		E(" allocate himax_smwp_wq failed\n");
-		err = -ENOMEM;
-		goto err_smwp_wq_failed;
-	}
-	INIT_DELAYED_WORK(&ts->smwp_work, himax_SMWP_work);
-#endif
-#ifdef HX_HIGH_SENSE
-	ts->HSEN_enable=0;
-	ts->himax_hsen_wq = create_singlethread_workqueue("HMX_HSEN_WORK");
-	if (!ts->himax_hsen_wq) {
-		E(" allocate himax_hsen_wq failed\n");
-		err = -ENOMEM;
-		goto err_hsen_wq_failed;
-	}
-	INIT_DELAYED_WORK(&ts->hsen_work, himax_HSEN_func);
-#endif
-
-#if defined(CONFIG_TOUCHSCREEN_HIMAX_DEBUG)
-	himax_touch_proc_init();
-#endif
-
-#if defined(HX_USB_DETECT)
-	if (ts->cable_config)
-		cable_detect_register_notifier(&himax_cable_status_handler);
-#endif
-
-	err = himax_ts_register_interrupt(ts->client);
-	if (err)
-		goto err_register_interrupt_failed;
-	return;
-
-err_register_interrupt_failed:
-#ifdef HX_HIGH_SENSE
-err_hsen_wq_failed:
-#endif
-#ifdef HX_SMART_WAKEUP
-err_smwp_wq_failed:
-	wake_lock_destroy(&ts->ts_SMWP_wake_lock);
-#endif
-err_input_register_device_failed:
-	input_free_device(ts->input_dev);
-err_detect_failed:
-#ifdef  HX_TP_PROC_FLASH_DUMP
-err_create_wq_failed:
-#endif
-err_ic_package_failed:
-
-return;
-}
-
 int himax_chip_common_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
-	int err = 0;
+	int ret = 0, err = 0;
 	struct himax_ts_data *ts;
 	struct himax_i2c_platform_data *pdata;
-
+        E("enter himax_chip_common_probe \n");
+	if (compare_lcd_id != 2 )
+		return (-ENODEV);
 	//Check I2C functionality
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		E("%s: i2c check functionality error\n", __func__);
@@ -1667,6 +1606,8 @@ int himax_chip_common_probe(struct i2c_client *client, const struct i2c_device_i
 		goto err_check_functionality_failed;
 	}
 
+	if(himax_burst_enable(client, 0))
+		goto err_check_functionality_failed;
 	ts = kzalloc(sizeof(struct himax_ts_data), GFP_KERNEL);
 	if (ts == NULL) {
 		E("%s: allocate himax_ts_data failed\n", __func__);
@@ -1706,59 +1647,205 @@ int himax_chip_common_probe(struct i2c_client *client, const struct i2c_device_i
 
 himax_gpio_power_config(ts->client, pdata);
 
-	err = himax_ts_pinctrl_init(ts);
-	if (err || ts->ts_pinctrl == NULL) {
-		E(" Pinctrl init failed\n");
-	}
-
 #ifndef CONFIG_OF
 	if (pdata->power) {
-		err = pdata->power(1);
-		if (err < 0) {
+		ret = pdata->power(1);
+		if (ret < 0) {
 			E("%s: power on failed\n", __func__);
 			goto err_power_failed;
 		}
 	}
 #endif
-	ts->pdata = pdata;
 	private_ts = ts;
 
-	mutex_init(&ts->fb_mutex);
-	/* ts initialization is deferred till FB_UNBLACK event;
-	 * probe is considered pending till then.*/
-	ts->probe_done = false;
-#ifdef CONFIG_FB
-	err = himax_fb_register(ts);
-	if (err) {
-		E("Falied to register fb notifier\n");
-		err = -ENOMEM;
-		goto err_fb_notif_wq_create;
+	//Get Himax IC Type / FW information / Calculate the point number
+	if (himax_check_chip_version(ts->client) == false) {
+		E("Himax chip doesn NOT EXIST");
+		goto err_ic_package_failed;
+	}
+	if (himax_ic_package_check(ts->client) == false) {
+		E("Himax chip doesn NOT EXIST");
+		goto err_ic_package_failed;
+	}
+
+	if (pdata->virtual_key)
+		ts->button = pdata->virtual_key;
+#ifdef  HX_TP_PROC_FLASH_DUMP
+		ts->flash_wq = create_singlethread_workqueue("himax_flash_wq");
+		if (!ts->flash_wq)
+		{
+			E("%s: create flash workqueue failed\n", __func__);
+			err = -ENOMEM;
+			goto err_create_wq_failed;
+		}
+
+		INIT_WORK(&ts->flash_work, himax_ts_flash_work_func);
+
+		setSysOperation(0);
+		setFlashBuffer();
+#endif
+
+#ifdef  HX_TP_PROC_DIAG
+	  ts->himax_diag_wq = create_singlethread_workqueue("himax_diag");
+		if (!ts->himax_diag_wq)
+		{
+			E("%s: create diag workqueue failed\n", __func__);
+			err = -ENOMEM;
+			goto err_create_wq_failed;
+		}
+		INIT_DELAYED_WORK(&ts->himax_diag_delay_wrok, himax_ts_diag_work_func);
+#endif
+
+himax_read_FW_ver(client);
+
+#ifdef HX_AUTO_UPDATE_FW
+	I(" %s in", __func__);
+	if(i_update_FW() == false)
+			I("NOT Have new FW=NOT UPDATE=\n");
+	else
+			I("Have new FW=UPDATE=\n");
+#endif
+
+	//Himax Power On and Load Config
+	if (himax_loadSensorConfig(client, pdata) < 0) {
+		E("%s: Load Sesnsor configuration failed, unload driver.\n", __func__);
+		goto err_detect_failed;
+	}
+
+	calculate_point_number();
+#ifdef HX_TP_PROC_DIAG
+	setXChannel(ic_data->HX_RX_NUM); // X channel
+	setYChannel(ic_data->HX_TX_NUM); // Y channel
+
+	setMutualBuffer();
+	setMutualNewBuffer();
+	setMutualOldBuffer();
+	if (getMutualBuffer() == NULL) {
+		E("%s: mutual buffer allocate fail failed\n", __func__);
+		return -1;
+	}
+#ifdef HX_TP_PROC_2T2R
+	if(Is_2T2R){
+		setXChannel_2(ic_data->HX_RX_NUM_2); // X channel
+		setYChannel_2(ic_data->HX_TX_NUM_2); // Y channel
+
+		setMutualBuffer_2();
+
+		if (getMutualBuffer_2() == NULL) {
+			E("%s: mutual buffer 2 allocate fail failed\n", __func__);
+			return -1;
+		}
 	}
 #endif
-
-    return 0;
-
-#ifdef CONFIG_FB
-err_fb_notif_wq_create:
 #endif
+#ifdef CONFIG_OF
+	ts->power = pdata->power;
+#endif
+	ts->pdata = pdata;
+
+	ts->x_channel = ic_data->HX_RX_NUM;
+	ts->y_channel = ic_data->HX_TX_NUM;
+	ts->nFinger_support = ic_data->HX_MAX_PT;
+	//calculate the i2c data size
+	calcDataSize(ts->nFinger_support);
+	I("%s: calcDataSize complete\n", __func__);
+#ifdef CONFIG_OF
+	ts->pdata->abs_pressure_min        = 0;
+	ts->pdata->abs_pressure_max        = 200;
+	ts->pdata->abs_width_min           = 0;
+	ts->pdata->abs_width_max           = 200;
+	pdata->cable_config[0]             = 0x90;
+	pdata->cable_config[1]             = 0x00;
+#endif
+	ts->suspended                      = false;
+#if defined(HX_USB_DETECT)||defined(HX_USB_DETECT2)
+	ts->usb_connected = 0x00;
+	ts->cable_config = pdata->cable_config;
+#endif
+	ts->protocol_type = pdata->protocol_type;
+	I("%s: Use Protocol Type %c\n", __func__,
+	ts->protocol_type == PROTOCOL_TYPE_A ? 'A' : 'B');
+
+	ret = himax_input_register(ts);
+	if (ret) {
+		E("%s: Unable to register %s input device\n",
+			__func__, ts->input_dev->name);
+		goto err_input_register_device_failed;
+	}
+#ifdef CONFIG_FB
+		ts->himax_att_wq = create_singlethread_workqueue("HMX_ATT_reuqest");
+		if (!ts->himax_att_wq) {
+			E(" allocate syn_att_wq failed\n");
+			err = -ENOMEM;
+			goto err_get_intr_bit_failed;
+		}
+		INIT_DELAYED_WORK(&ts->work_att, himax_fb_register);
+		queue_delayed_work(ts->himax_att_wq, &ts->work_att, msecs_to_jiffies(15000));
+#endif
+
+#ifdef HX_SMART_WAKEUP
+	ts->SMWP_enable=0;
+	wake_lock_init(&ts->ts_SMWP_wake_lock, WAKE_LOCK_SUSPEND, HIMAX_common_NAME);
+
+	ts->himax_smwp_wq = create_singlethread_workqueue("HMX_SMWP_WORK");
+		if (!ts->himax_smwp_wq) {
+			E(" allocate himax_smwp_wq failed\n");
+			err = -ENOMEM;
+			goto err_smwp_wq_failed;
+		}
+		INIT_DELAYED_WORK(&ts->smwp_work, himax_SMWP_work);
+#endif
+#ifdef HX_HIGH_SENSE
+	ts->HSEN_enable=0;
+	ts->himax_hsen_wq = create_singlethread_workqueue("HMX_HSEN_WORK");
+		if (!ts->himax_hsen_wq) {
+			E(" allocate himax_hsen_wq failed\n");
+			err = -ENOMEM;
+			goto err_hsen_wq_failed;
+		}
+		INIT_DELAYED_WORK(&ts->hsen_work, himax_HSEN_func);
+#endif
+
+#if defined(CONFIG_TOUCHSCREEN_HIMAX_DEBUG)
+	himax_touch_proc_init();
+#endif
+
+#if defined(HX_USB_DETECT)
+	if (ts->cable_config)
+		cable_detect_register_notifier(&himax_cable_status_handler);
+#endif
+
+	err = himax_ts_register_interrupt(ts->client);
+	if (err)
+		goto err_register_interrupt_failed;
+
+return 0;
+
+err_register_interrupt_failed:
+#ifdef HX_HIGH_SENSE
+err_hsen_wq_failed:
+#endif
+#ifdef HX_SMART_WAKEUP
+err_smwp_wq_failed:
+	wake_lock_destroy(&ts->ts_SMWP_wake_lock);
+#endif
+#ifdef CONFIG_FB
+err_get_intr_bit_failed:
+#endif
+err_input_register_device_failed:
+	input_free_device(ts->input_dev);
+err_detect_failed:
+#ifdef  HX_TP_PROC_FLASH_DUMP
+err_create_wq_failed:
+#endif
+err_ic_package_failed:
+
 #ifdef CONFIG_OF
 err_alloc_dt_pdata_failed:
 #else
 err_power_failed:
 err_get_platform_data_fail:
 #endif
-	if (ts->ts_pinctrl) {
-		if (IS_ERR_OR_NULL(ts->pinctrl_state_release)) {
-			devm_pinctrl_put(ts->ts_pinctrl);
-			ts->ts_pinctrl = NULL;
-		} else {
-			err = pinctrl_select_state(ts->ts_pinctrl,
-					ts->pinctrl_state_release);
-			if (err)
-				E("failed to select relase pinctrl state %d\n",
-					err);
-		}
-	}
 	kfree(ic_data);
 
 err_dt_ic_data_fail:
@@ -1778,7 +1865,6 @@ err_check_functionality_failed:
 int himax_chip_common_remove(struct i2c_client *client)
 {
 	struct himax_ts_data *ts = i2c_get_clientdata(client);
-	int ret;
 #if defined(CONFIG_TOUCHSCREEN_HIMAX_DEBUG)
 	himax_touch_proc_deinit();
 #endif
@@ -1797,18 +1883,6 @@ int himax_chip_common_remove(struct i2c_client *client)
 
 	input_unregister_device(ts->input_dev);
 
-	if (ts->ts_pinctrl) {
-		if (IS_ERR_OR_NULL(ts->pinctrl_state_release)) {
-			devm_pinctrl_put(ts->ts_pinctrl);
-			ts->ts_pinctrl = NULL;
-		} else {
-			ret = pinctrl_select_state(ts->ts_pinctrl,
-					ts->pinctrl_state_release);
-			if (ret)
-				E("failed to select relase pinctrl state %d\n",
-					ret);
-		}
-	}
 #ifdef HX_SMART_WAKEUP
 		wake_lock_destroy(&ts->ts_SMWP_wake_lock);
 #endif
@@ -1840,13 +1914,7 @@ int himax_chip_common_suspend(struct himax_ts_data *ts)
 		return 0;
 	}
 #endif
-#ifdef HX_TP_PROC_HITOUCH
-	if(hitouch_is_connect)
-	{
-		I("[himax] %s: Hitouch connect, reject suspend\n",__func__);
-		return 0;
-	}
-#endif
+
 #ifdef HX_SMART_WAKEUP
 	if(ts->SMWP_enable)
 	{
@@ -1857,10 +1925,10 @@ int himax_chip_common_suspend(struct himax_ts_data *ts)
 		return 0;
 	}
 #endif
-#ifdef HX_ESD_WORKAROUND
+
 	ESD_00_counter = 0;
 	ESD_00_Flag = 0;
-#endif
+
 	if (!ts->use_irq) {
 		ret = cancel_work_sync(&ts->work);
 		if (ret)
@@ -1870,15 +1938,6 @@ int himax_chip_common_suspend(struct himax_ts_data *ts)
 	//ts->first_pressed = 0;
 	atomic_set(&ts->suspend_mode, 1);
 	ts->pre_finger_mask = 0;
-
-	if (ts->ts_pinctrl) {
-		ret = pinctrl_select_state(ts->ts_pinctrl,
-				ts->pinctrl_state_suspend);
-		if (ret < 0) {
-			E("Failed to get idle pinctrl state %d\n", ret);
-		}
-	}
-
 	if (ts->pdata->powerOff3V3 && ts->pdata->power)
 		ts->pdata->power(0);
 
@@ -1887,8 +1946,6 @@ int himax_chip_common_suspend(struct himax_ts_data *ts)
 
 int himax_chip_common_resume(struct himax_ts_data *ts)
 {
-	int retval;
-
 	I("%s: enter \n", __func__);
 
 	if (ts->pdata->powerOff3V3 && ts->pdata->power)
@@ -1903,22 +1960,13 @@ int himax_chip_common_resume(struct himax_ts_data *ts)
 		/*************************************/
 		
 		
-	if (ts->ts_pinctrl) {
-		retval = pinctrl_select_state(ts->ts_pinctrl,
-				ts->pinctrl_state_active);
-		if (retval < 0) {
-			E("Cannot get default pinctrl state %d\n", retval);
-			goto err_pinctrl_select_resume;
-		}
-	}
-
 	atomic_set(&ts->suspend_mode, 0);
 
 	himax_int_enable(ts->client->irq,1);
 
 	ts->suspended = false;
 #if defined(HX_USB_DETECT2)
-	ts->usb_connected = 0x00;
+	ts->usb_connected = 0x00;	//added by TZB
 	himax_cable_detect_func();
 #endif
 #ifdef HX_SMART_WAKEUP
@@ -1928,9 +1976,5 @@ int himax_chip_common_resume(struct himax_ts_data *ts)
 	queue_delayed_work(ts->himax_hsen_wq, &ts->hsen_work, msecs_to_jiffies(1000));
 #endif
 	return 0;
-err_pinctrl_select_resume:
-	if (ts->pdata->powerOff3V3 && ts->pdata->power)
-		ts->pdata->power(0);
-	return retval;
 }
 

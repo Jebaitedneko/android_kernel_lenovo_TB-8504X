@@ -13,7 +13,6 @@ config TOUCHSCREEN_HIMAX_DEBUG
 		depends on TOUCHSCREEN_HIMAX_I2C
 		help
 		This enables support for HIMAX debug function.
-
 config HMX_DB
 	tristate "HIMAX driver test over Dragon Board"
 	depends on TOUCHSCREEN_HIMAX_I2C
