@@ -307,7 +307,7 @@
 
 			qcom,timing-db-mode;
 			qcom,mdss-mdp = <&mdss_mdp>;
-			vdd-supply = <&pm8937_l17>;
+			//vdd-supply = <&pm8937_l17>;
 			vddio-supply = <&pm8937_l6>;
 
 			clocks = <&clock_gcc_mdss clk_gcc_mdss_byte0_clk>,
@@ -318,7 +318,7 @@
 			clock-names = "byte_clk", "pixel_clk", "core_clk",
 				"byte_clk_rcg", "pixel_clk_rcg";
 
-			qcom,platform-strength-ctrl = [ff 06];
+			qcom,platform-strength-ctrl = [ff 10];
 			qcom,platform-bist-ctrl = [00 00 b1 ff 00 00];
 			qcom,platform-regulator-settings = [03 08 07 00
 				20 07 01];
@@ -341,7 +341,7 @@
 			      "dsi_phy_regulator", "mmss_misc_phys";
 
 			qcom,mdss-mdp = <&mdss_mdp>;
-			vdd-supply = <&pm8937_l17>;
+			//vdd-supply = <&pm8937_l17>;
 			vddio-supply = <&pm8937_l6>;
 
 			clocks = <&clock_gcc_mdss clk_gcc_mdss_byte1_clk>,

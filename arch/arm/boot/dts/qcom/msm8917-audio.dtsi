@@ -28,6 +28,7 @@
 };
 
 &ext_codec {
+		status = "disabled";
 	qcom,model = "msm8952-tasha-snd-card";
 
 	qcom,cdc-us-euro-gpios = <&tlmm 63 0>;
@@ -42,6 +43,7 @@
 };
 
 &wcd9xxx_intc {
+		status = "disabled";
 	interrupt-parent = <&tlmm>;
 	interrupts = <73 0>;
 	qcom,gpio-connect = <&tlmm 73 0>;

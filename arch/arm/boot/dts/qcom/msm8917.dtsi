@@ -19,7 +19,7 @@
 / {
 	model = "Qualcomm Technologies, Inc. MSM8917";
 	compatible = "qcom,msm8917";
-	qcom,msm-id = <303 0x0>, <308 0x0>, <309 0x0>;
+	qcom,msm-id = <303 0x0>, <308 0x0>, <309 0x0>,<307 0x0>;
 	interrupt-parent = <&intc>;
 
 	chosen {
@@ -60,7 +60,7 @@
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
 					fsmgr_flags = "wait";
-					status = "ok";
+					status = "disabled";
 				};
 				 system {
 					compatible = "android,system";
@@ -844,12 +844,15 @@
 		hsusb_vdd_dig-supply = <&pm8917_l2>;
 		HSUSB_1p8-supply = <&pm8917_l7>;
 		HSUSB_3p3-supply = <&pm8917_l13>;
+		HSUSB_gpiopull-supply = <&pm8917_l16>;
 		qcom,vdd-voltage-level = <0 1200000 1200000>;
 		vbus_otg-supply = <&smbcharger_charger_otg>;
+		qcom,usbid-vadc = <&pm8937_vadc>;
 
 		qcom,hsusb-otg-phy-type = <3>; /* SNPS Femto PHY */
 		qcom,hsusb-otg-mode = <3>; /* OTG mode */
 		qcom,hsusb-otg-otg-control = <2>; /* PMIC */
+		qcom,usbid-gpio = <&tlmm 12 0>;
 		qcom,dp-manual-pullup;
 		qcom,hsusb-otg-mpm-dpsehv-int = <49>;
 		qcom,hsusb-otg-mpm-dmsehv-int = <58>;
@@ -1059,6 +1062,13 @@
 		compatible = "qcom,jtag-fuse-v2";
 		reg = <0xa601c 0x8>;
 		reg-names = "fuse-base";
+	};
+
+	sn_fuse: snfuse@0xA4128 {
+	    compatible = "qcom,sn-fuse";
+	    reg = <0xA4128 0x4>,
+		  <0xA6034 0x4>;
+	    reg-names = "sn-base","fuse-state";
 	};
 
 	jtag_mm0: jtagmm@61bc000 {
