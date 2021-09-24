@@ -6364,6 +6364,13 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 		kfree(buffer_node);
 		goto fail_cmd;
 	}
+
+
+	if(bufcnt == 0){
+	pr_err("%s: invalid buffer count\n", __func__);
+	return -EINVAL;
+	}
+
 	mutex_lock(&ac->cmd_lock);
 
 	for (i = 0; i < bufcnt; i++) {

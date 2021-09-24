@@ -246,7 +246,6 @@ static int snd_usb_create_streams(struct snd_usb_audio *chip, int ctrlif)
 		dev_err(&dev->dev, "cannot find UAC_HEADER\n");
 		return -EINVAL;
 	}
-
 	rest_bytes = (void *)(host_iface->extra + host_iface->extralen) -
 		control_header;
 
