@@ -270,6 +270,9 @@ struct dwc3_msm {
 	atomic_t                in_p3;
 	unsigned int		lpm_to_suspend_delay;
 	bool			init;
+#if defined(CONFIG_KERNEL_CUSTOM_P3590) || defined(CONFIG_KERNEL_CUSTOM_P3592)
+	struct			hrtimer chg_hrtimer;
+#endif
 
 	u32                     pm_qos_latency;
 	struct pm_qos_request   pm_qos_req_dma;
@@ -1856,6 +1859,10 @@ static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned event,
 					PWR_EVNT_LPM_OUT_L1_MASK, 1);
 
 		atomic_set(&dwc->in_lpm, 0);
+		#if defined(CONFIG_KERNEL_CUSTOM_P3590) || defined(CONFIG_KERNEL_CUSTOM_P3592)
+		pr_err("%s():cancel HRTIMER\n", __func__);
+				hrtimer_cancel(&mdwc->chg_hrtimer);
+		#endif
 		break;
 	case DWC3_CONTROLLER_NOTIFY_OTG_EVENT:
 		dev_dbg(mdwc->dev, "DWC3_CONTROLLER_NOTIFY_OTG_EVENT received\n");
@@ -2343,6 +2350,10 @@ static void dwc3_ext_event_notify(struct dwc3_msm *mdwc)
 	} else {
 		dbg_event(0xFF, "BSV clear", 0);
 		clear_bit(B_SESS_VLD, &mdwc->inputs);
+		#if defined(CONFIG_KERNEL_CUSTOM_P3590) || defined(CONFIG_KERNEL_CUSTOM_P3592)
+		pr_err("%s():cancel HRTIMER\n", __func__);
+				hrtimer_cancel(&mdwc->chg_hrtimer);
+		#endif
 	}
 
 	if (mdwc->suspend) {
@@ -2649,7 +2660,12 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 		switch (mdwc->usb_supply_type) {
 		case POWER_SUPPLY_TYPE_USB:
 			mdwc->chg_type = DWC3_SDP_CHARGER;
-			mdwc->voltage_max = MICRO_5V;
+			#if defined(CONFIG_KERNEL_CUSTOM_P3590) || defined(CONFIG_KERNEL_CUSTOM_P3592)
+			pr_err("%s(): start hrtimer\n", __func__);
+					hrtimer_start(&mdwc->chg_hrtimer,
+					ktime_set(1, 0),
+					HRTIMER_MODE_REL);
+			#endif
 			break;
 		case POWER_SUPPLY_TYPE_USB_DCP:
 			mdwc->chg_type = DWC3_DCP_CHARGER;
@@ -2667,6 +2683,12 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 		case POWER_SUPPLY_TYPE_USB_ACA:
 			mdwc->chg_type = DWC3_PROPRIETARY_CHARGER;
 			break;
+		#ifdef CONFIG_TUSB422
+		case POWER_SUPPLY_TYPE_USB_PD:
+			mdwc->chg_type = DWC3_SDP_CHARGER;
+			mdwc->voltage_max = MICRO_5V;
+			break;
+		#endif
 		default:
 			mdwc->chg_type = DWC3_INVALID_CHARGER;
 			break;
@@ -2860,6 +2882,20 @@ static int dwc3_msm_get_clk_gdsc(struct dwc3_msm *mdwc)
 	return 0;
 }
 
+#if defined(CONFIG_KERNEL_CUSTOM_P3590) || defined(CONFIG_KERNEL_CUSTOM_P3592)
+static enum hrtimer_restart chg_hrtimer_func(struct hrtimer *hrtimer)
+{
+        struct power_supply *usb_psy;
+	const union power_supply_propval ret = {500,};
+	struct dwc3_msm *mdwc = container_of(hrtimer, struct dwc3_msm,chg_hrtimer);
+	usb_psy = power_supply_get_by_name("usb");
+		pr_err("%s(): Inside timer expired.\n", __func__);
+		pr_err("%s(): DO floating charger update.\n", __func__);
+        dwc3_msm_power_set_property_usb(usb_psy,POWER_SUPPLY_PROP_CURRENT_MAX,&ret);
+	dwc3_msm_gadget_vbus_draw(mdwc, 500);
+		return HRTIMER_NORESTART;
+}
+#endif
 static ssize_t mode_show(struct device *dev, struct device_attribute *attr,
 		char *buf)
 {
@@ -2993,6 +3029,12 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 
 	mdwc->id_state = DWC3_ID_FLOAT;
 	set_bit(ID, &mdwc->inputs);
+
+	#if defined(CONFIG_KERNEL_CUSTOM_P3590) || defined(CONFIG_KERNEL_CUSTOM_P3592)
+	hrtimer_init(&mdwc->chg_hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+		mdwc->chg_hrtimer.function = chg_hrtimer_func;
+	#endif
+
 	mdwc->charging_disabled = of_property_read_bool(node,
 				"qcom,charging-disabled");
 
