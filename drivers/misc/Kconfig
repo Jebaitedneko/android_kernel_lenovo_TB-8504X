@@ -590,6 +590,12 @@ config TI_DRV2667
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called ti_drv2667.
+#for vibrator
+config VIB_GPIO
+       tristate "Vibrator timed gpio driver"
+       #depends on VIB_GPIO
+       default n
+
 
 config QPNP_MISC
 	tristate "QPNP Misc Peripheral"
@@ -627,4 +633,5 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/wantjoin/Kconfig"
 endmenu
