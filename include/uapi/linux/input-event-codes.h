@@ -337,6 +337,15 @@
 
 #define KEY_MICMUTE		248	/* Mute / unmute the microphone */
 
+#ifdef CONFIG_KERNEL_CUSTOM_P3590
+
+#define BTN_STYLUS		0x292
+#define BTN_STYLUS2		0x293
+#else
+#define BTN_STYLUS		0x14b
+#define BTN_STYLUS2		0x14c
+#endif
+
 /* Code 255 is reserved for special needs of AT keyboard driver */
 
 #define BTN_MISC		0x100
@@ -408,8 +417,8 @@
 #define BTN_TOOL_LENS		0x147
 #define BTN_TOOL_QUINTTAP	0x148	/* Five fingers on trackpad */
 #define BTN_TOUCH		0x14a
-#define BTN_STYLUS		0x14b
-#define BTN_STYLUS2		0x14c
+//#define BTN_STYLUS		0x14b
+//#define BTN_STYLUS2		0x14c
 #define BTN_TOOL_DOUBLETAP	0x14d
 #define BTN_TOOL_TRIPLETAP	0x14e
 #define BTN_TOOL_QUADTAP	0x14f	/* Four fingers on trackpad */
